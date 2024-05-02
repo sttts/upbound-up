@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/utils/ptr"
 
-	"github.com/pkg/errors"
 	"github.com/upbound/up/internal/kube"
 	upbound "github.com/upbound/up/internal/upbound"
 )
@@ -32,17 +32,6 @@ import (
 const (
 	upboundPreviousContextSuffix = "-previous"
 )
-
-// Accept upserts the "upbound" kubeconfig context and cluster to the current
-// kubeconfig, pointing to the space.
-func (s *Space) Accept(ctx context.Context, upCtx *upbound.Context, kubeContext string) (msg string, err error) {
-	spaceContext, err := writeContext(ctx, upCtx, *s, types.NamespacedName{}, kubeContext)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf(contextSwitchedFmt, spaceContext, s.Breadcrumbs()), nil
-}
 
 // Accept upserts the "upbound" kubeconfig context and cluster to the current
 // kubeconfig, pointing to the group.
