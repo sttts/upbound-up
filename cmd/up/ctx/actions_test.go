@@ -395,10 +395,11 @@ func TestControlPlaneAccept(t *testing.T) {
 			ctp := &ControlPlane{
 				Group: Group{
 					Space: Space{
-						Org:     Organization{Name: "org"},
-						Name:    "space",
-						Ingress: "https://ingress",
-						CA:      []byte{1, 2, 3},
+						Org:      Organization{Name: "org"},
+						Name:     "space",
+						Ingress:  "https://ingress",
+						CA:       []byte{1, 2, 3},
+						AuthInfo: tt.conf.AuthInfos[tt.conf.Contexts[tt.conf.CurrentContext].AuthInfo],
 					},
 					Name: tt.ctp.Namespace,
 				},
