@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	spacesv1beta1 "github.com/upbound/up-sdk-go/apis/spaces/v1beta1"
+	"github.com/upbound/up/internal/kube"
 	"github.com/upbound/up/internal/profile"
 	"github.com/upbound/up/internal/upbound"
 )
@@ -245,7 +246,7 @@ func (c *Cmd) RunRelative(ctx context.Context, kongCtx *kong.Context, upCtx *upb
 	m := model{
 		state:         state,
 		upCtx:         upCtx,
-		contextWriter: c.kubeContextWriter(),
+		contextWriter: c.kubeContextWriter(upCtx),
 	}
 	for _, s := range strings.Split(c.Argument, "/") {
 		switch s {
@@ -322,7 +323,7 @@ func (c *Cmd) RunInteractive(ctx context.Context, kongCtx *kong.Context, upCtx *
 	m := model{
 		state:         initialState,
 		upCtx:         upCtx,
-		contextWriter: c.kubeContextWriter(),
+		contextWriter: c.kubeContextWriter(upCtx),
 	}
 	items, err := m.state.Items(ctx, upCtx)
 	if err != nil {
@@ -349,14 +350,17 @@ func (c *Cmd) RunInteractive(ctx context.Context, kongCtx *kong.Context, upCtx *
 	return nil
 }
 
-func (c *Cmd) kubeContextWriter() kubeContextWriter {
+func (c *Cmd) kubeContextWriter(upCtx *upbound.Context) kubeContextWriter {
 	if c.File == "-" {
 		return &printWriter{}
 	}
 
 	return &fileWriter{
-		fileOverride: c.File,
-		kubeContext:  c.KubeContext,
+		fileOverride:     c.File,
+		kubeContext:      c.KubeContext,
+		verify:           kube.VerifyKubeConfig(upCtx.WrapTransport),
+		writeLastContext: writeLastContext,
+		modifyConfig:     clientcmd.ModifyConfig,
 	}
 }
 

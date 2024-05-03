@@ -6,11 +6,11 @@ import (
 	"io/fs"
 	"reflect"
 
-	"github.com/upbound/up/internal/kube"
-	upbound "github.com/upbound/up/internal/upbound"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/utils/ptr"
+
+	upbound "github.com/upbound/up/internal/upbound"
 )
 
 type kubeContextWriter interface {
@@ -34,8 +34,11 @@ func (p *printWriter) Write(upCtx *upbound.Context, config *clientcmdapi.Config)
 }
 
 type fileWriter struct {
-	fileOverride string
-	kubeContext  string
+	fileOverride     string
+	kubeContext      string
+	writeLastContext func(string) error
+	verify           func(cfg *clientcmdapi.Config) error
+	modifyConfig     func(configAccess clientcmd.ConfigAccess, newConfig clientcmdapi.Config, relativizePaths bool) error
 }
 
 var _ kubeContextWriter = &fileWriter{}
@@ -47,7 +50,7 @@ func (f *fileWriter) Write(upCtx *upbound.Context, config *clientcmdapi.Config) 
 		return err
 	}
 
-	ctpConf, prevContext, err := f.replaceContext(upCtx, config, outConfig)
+	ctpConf, prevContext, err := f.replaceContext(config, outConfig)
 	if err != nil {
 		return err
 	}
@@ -59,11 +62,11 @@ func (f *fileWriter) Write(upCtx *upbound.Context, config *clientcmdapi.Config) 
 		}
 	}
 
-	if err := clientcmd.ModifyConfig(pathOptions, *ctpConf, false); err != nil {
+	if err := f.modifyConfig(pathOptions, *ctpConf, false); err != nil {
 		return err
 	}
 
-	if err := writeLastContext(prevContext); err != nil { // nolint:staticcheck
+	if err := f.writeLastContext(prevContext); err != nil { // nolint:staticcheck
 		// ignore error because now everything has happened already.
 	}
 	return nil
@@ -92,7 +95,7 @@ func (f *fileWriter) loadOutputKubeconfig(upCtx *upbound.Context) (config *clien
 
 // replaceContext upserts the current kubeconfig with the upserted upbound context
 // and cluster to point to the given space and resource
-func (f *fileWriter) replaceContext(upCtx *upbound.Context, inConfig *clientcmdapi.Config, outConfig *clientcmdapi.Config) (ctpConf *clientcmdapi.Config, prevContext string, err error) {
+func (f *fileWriter) replaceContext(inConfig *clientcmdapi.Config, outConfig *clientcmdapi.Config) (ctpConf *clientcmdapi.Config, prevContext string, err error) {
 	// assumes the current context
 	ctpConf, prevContext, err = mergeUpboundContext(outConfig, inConfig, inConfig.CurrentContext, f.kubeContext)
 	if err != nil {
@@ -101,7 +104,7 @@ func (f *fileWriter) replaceContext(upCtx *upbound.Context, inConfig *clientcmda
 	if contextDeepEqual(ctpConf, prevContext, ctpConf.CurrentContext) {
 		return nil, prevContext, nil
 	}
-	if err := kube.VerifyKubeConfig(upCtx.WrapTransport)(ctpConf); err != nil {
+	if err := f.verify(ctpConf); err != nil {
 		return nil, "", err
 	}
 

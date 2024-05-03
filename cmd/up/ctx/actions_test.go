@@ -15,12 +15,16 @@
 package ctx
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+
+	"github.com/upbound/up/internal/upbound"
 )
 
 func TestGroupAccept(t *testing.T) {
@@ -191,16 +195,41 @@ func TestGroupAccept(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			g := &Group{name: tt.group}
-			conf, last, err := g.accept(tt.conf, "profile", tt.preferred)
+			var last string
+			var conf *clientcmdapi.Config
+			writer := &fileWriter{
+				kubeContext:      tt.preferred,
+				writeLastContext: func(c string) error { last = c; return nil },
+				verify:           func(c *clientcmdapi.Config) error { return nil },
+				modifyConfig: func(configAccess clientcmd.ConfigAccess, newConfig clientcmdapi.Config, relativizePaths bool) error {
+					conf = &newConfig
+					return nil
+				},
+			}
+			clientConfig := clientcmd.NewDefaultClientConfig(*tt.conf, nil)
+			upCtx := &upbound.Context{
+				Kubecfg: clientConfig,
+			}
+
+			g := &Group{
+				space: Space{
+					org:      Organization{name: "org"},
+					name:     "space",
+					ingress:  "https://ingress",
+					ca:       []byte{1, 2, 3},
+					authInfo: nil,
+				},
+				name: tt.group,
+			}
+			_, err := g.Accept(context.Background(), upCtx, writer)
 			if diff := cmp.Diff(tt.wantErr, fmt.Sprintf("%v", err)); diff != "" {
 				t.Fatalf("g.accept(...): -want err, +got err:\n%s", diff)
 			}
 			if diff := cmp.Diff(tt.wantConf, conf); diff != "" {
-				t.Fatalf("g.accept(...): -want conf, +got conf:\n%s", diff)
+				t.Errorf("g.accept(...): -want conf, +got conf:\n%s", diff)
 			}
 			if diff := cmp.Diff(tt.wantLast, last); diff != "" {
-				t.Fatalf("g.accept(...): -want last, +got last:\n%s", diff)
+				t.Errorf("g.accept(...): -want last, +got last:\n%s", diff)
 			}
 		})
 	}
@@ -354,16 +383,43 @@ func TestControlPlaneAccept(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			ctp := &ControlPlane{group: Group{name: tt.ctp.Namespace}, name: tt.ctp.Name}
-			conf, last, err := ctp.accept(tt.conf, "profile", "https://ingress", []byte{1, 2, 3}, tt.preferred)
+			var last string
+			var conf *clientcmdapi.Config
+			writer := &fileWriter{
+				kubeContext:      tt.preferred,
+				writeLastContext: func(c string) error { last = c; return nil },
+				verify:           func(c *clientcmdapi.Config) error { return nil },
+				modifyConfig: func(configAccess clientcmd.ConfigAccess, newConfig clientcmdapi.Config, relativizePaths bool) error {
+					conf = &newConfig
+					return nil
+				},
+			}
+			clientConfig := clientcmd.NewDefaultClientConfig(*tt.conf, nil)
+			upCtx := &upbound.Context{
+				Kubecfg: clientConfig,
+			}
+
+			ctp := &ControlPlane{
+				group: Group{
+					space: Space{
+						org:     Organization{name: "org"},
+						name:    "space",
+						ingress: "https://ingress",
+						ca:      []byte{1, 2, 3},
+					},
+					name: tt.ctp.Namespace,
+				},
+				name: tt.ctp.Name,
+			}
+			_, err := ctp.Accept(context.Background(), upCtx, writer)
 			if diff := cmp.Diff(tt.wantErr, fmt.Sprintf("%v", err)); diff != "" {
 				t.Fatalf("g.accept(...): -want err, +got err:\n%s", diff)
 			}
 			if diff := cmp.Diff(tt.wantConf, conf); diff != "" {
-				t.Fatalf("g.accept(...): -want conf, +got conf:\n%s", diff)
+				t.Errorf("g.accept(...): -want conf, +got conf:\n%s", diff)
 			}
 			if diff := cmp.Diff(tt.wantLast, last); diff != "" {
-				t.Fatalf("g.accept(...): -want last, +got last:\n%s", diff)
+				t.Errorf("g.accept(...): -want last, +got last:\n%s", diff)
 			}
 		})
 	}
