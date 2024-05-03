@@ -257,7 +257,7 @@ func (c *Cmd) RunRelative(ctx context.Context, upCtx *upbound.Context, initialSt
 				return fmt.Errorf("cannot move to parent context from: %s", m.state.Breadcrumbs())
 			}
 			var err error
-			m, err = back.Back(ctx, upCtx, m)
+			m, err = back.Back(m)
 			if err != nil {
 				return err
 			}
@@ -273,7 +273,7 @@ func (c *Cmd) RunRelative(ctx context.Context, upCtx *upbound.Context, initialSt
 					if i.onEnter == nil {
 						return fmt.Errorf("cannot enter %q in: %s", s, m.state.Breadcrumbs())
 					}
-					m, err = i.onEnter(ctx, m.upCtx, m)
+					m, err = i.onEnter(m)
 					if err != nil {
 						return err
 					}
@@ -295,7 +295,7 @@ func (c *Cmd) RunRelative(ctx context.Context, upCtx *upbound.Context, initialSt
 			return fmt.Errorf("cannot move context to: %s", m.state.Breadcrumbs())
 		}
 		var err error
-		msg, err = accepting.Accept(ctx, upCtx, m.contextWriter)
+		msg, err = accepting.Accept(m.contextWriter)
 		if err != nil {
 			return err
 		}
@@ -356,6 +356,7 @@ func (c *Cmd) kubeContextWriter(upCtx *upbound.Context) kubeContextWriter {
 	}
 
 	return &fileWriter{
+		upCtx:            upCtx,
 		fileOverride:     c.File,
 		kubeContext:      c.KubeContext,
 		verify:           kube.VerifyKubeConfig(upCtx.WrapTransport),
@@ -402,15 +403,15 @@ func deriveState(ctx context.Context, upCtx *upbound.Context, conf *clientcmdapi
 	// determine if self-hosted by looking for ingress
 	host, ca, err := getIngressHost(ctx, spaceClient)
 	if kerrors.IsNotFound(err) || meta.IsNoMatchError(err) || kerrors.IsUnauthorized(err) {
-		return DeriveCloudState(ctx, upCtx, conf)
+		return DeriveCloudState(upCtx, conf)
 	} else if err != nil {
 		return nil, err
 	}
 
-	return DeriveSelfHostedState(ctx, upCtx, conf, host, ca, ctp)
+	return DeriveSelfHostedState(conf, host, ca, ctp)
 }
 
-func DeriveSelfHostedState(ctx context.Context, upCtx *upbound.Context, conf *clientcmdapi.Config, ingress string, ca []byte, ctp types.NamespacedName) (NavigationState, error) {
+func DeriveSelfHostedState(conf *clientcmdapi.Config, ingress string, ca []byte, ctp types.NamespacedName) (NavigationState, error) {
 	auth := conf.AuthInfos[conf.Contexts[conf.CurrentContext].AuthInfo]
 
 	space := Space{
@@ -440,7 +441,7 @@ func DeriveSelfHostedState(ctx context.Context, upCtx *upbound.Context, conf *cl
 	}
 }
 
-func DeriveCloudState(ctx context.Context, upCtx *upbound.Context, conf *clientcmdapi.Config) (NavigationState, error) {
+func DeriveCloudState(upCtx *upbound.Context, conf *clientcmdapi.Config) (NavigationState, error) {
 	// todo(redbackthomson): Validate we have an active session to cloud in the
 	// current profile
 

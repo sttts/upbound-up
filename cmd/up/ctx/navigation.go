@@ -51,13 +51,13 @@ type NavigationState interface {
 // Accepting is a model state that provides a method to accept a navigation node.
 type Accepting interface {
 	NavigationState
-	Accept(ctx context.Context, upCtx *upbound.Context, writer kubeContextWriter) (string, error)
+	Accept(writer kubeContextWriter) (string, error)
 }
 
 // Back is a model state that provides a method to go back to the parent navigation node.
 type Back interface {
 	NavigationState
-	Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error)
+	Back(m model) (model, error)
 	CanBack() bool
 }
 
@@ -84,7 +84,7 @@ func (r *Root) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item, 
 
 	items := make([]list.Item, 0, len(orgs))
 	for _, org := range orgs {
-		items = append(items, item{text: org.DisplayName, kind: "organization", matchingTerms: []string{org.Name}, onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+		items = append(items, item{text: org.DisplayName, kind: "organization", matchingTerms: []string{org.Name}, onEnter: func(m model) (model, error) {
 			m.state = &Organization{Name: org.Name}
 			return m, nil
 		}})
@@ -135,7 +135,7 @@ func (o *Organization) Items(ctx context.Context, upCtx *upbound.Context) ([]lis
 			}
 		}
 
-		items = append(items, item{text: space.GetObjectMeta().GetName(), kind: "space", onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+		items = append(items, item{text: space.GetObjectMeta().GetName(), kind: "space", onEnter: func(m model) (model, error) {
 			m.state = &Space{
 				Org:     *o,
 				Name:    space.GetObjectMeta().GetName(),
@@ -151,7 +151,7 @@ func (o *Organization) Items(ctx context.Context, upCtx *upbound.Context) ([]lis
 	return items, nil
 }
 
-func (o *Organization) Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+func (o *Organization) Back(m model) (model, error) {
 	m.state = &Root{}
 	return m, nil
 }
@@ -231,7 +231,7 @@ func (s *Space) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item,
 		items = append(items, item{text: "..", kind: "profiles", onEnter: s.Back, back: true})
 	}
 	for _, ns := range nss.Items {
-		items = append(items, item{text: ns.Name, kind: "group", onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+		items = append(items, item{text: ns.Name, kind: "group", onEnter: func(m model) (model, error) {
 			m.state = &Group{Space: *s, Name: ns.Name}
 			return m, nil
 		}})
@@ -244,7 +244,7 @@ func (s *Space) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item,
 	return items, nil
 }
 
-func (s *Space) Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+func (s *Space) Back(m model) (model, error) {
 	m.state = &s.Org
 	return m, nil
 }
@@ -295,7 +295,7 @@ func (g *Group) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item,
 	items = append(items, item{text: "..", kind: "groups", onEnter: g.Back, back: true})
 
 	for _, ctp := range ctps.Items {
-		items = append(items, item{text: ctp.Name, kind: "controlplane", onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+		items = append(items, item{text: ctp.Name, kind: "controlplane", onEnter: func(m model) (model, error) {
 			m.state = &ControlPlane{Group: *g, Name: ctp.Name}
 			return m, nil
 		}})
@@ -321,7 +321,7 @@ func (g *Group) Breadcrumbs() string {
 	return g.Space.Breadcrumbs() + pathSeparatorStyle.Render(" > ") + pathSegmentStyle.Render(g.Name)
 }
 
-func (g *Group) Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+func (g *Group) Back(m model) (model, error) {
 	m.state = &g.Space
 	return m, nil
 }
@@ -358,7 +358,7 @@ func (ctp *ControlPlane) Breadcrumbs() string {
 	return ctp.Group.Space.Breadcrumbs() + pathSeparatorStyle.Render(" > ") + pathSegmentStyle.Render(ctp.Group.Name) + pathSeparatorStyle.Render("/") + pathSegmentStyle.Render(ctp.Name)
 }
 
-func (ctp *ControlPlane) Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
+func (ctp *ControlPlane) Back(m model) (model, error) {
 	m.state = &ctp.Group
 	return m, nil
 }

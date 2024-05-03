@@ -15,7 +15,6 @@
 package ctx
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -198,6 +197,7 @@ func TestGroupAccept(t *testing.T) {
 			var last string
 			var conf *clientcmdapi.Config
 			writer := &fileWriter{
+				upCtx:            &upbound.Context{Kubecfg: clientcmd.NewDefaultClientConfig(*tt.conf, nil)},
 				kubeContext:      tt.preferred,
 				writeLastContext: func(c string) error { last = c; return nil },
 				verify:           func(c *clientcmdapi.Config) error { return nil },
@@ -205,10 +205,6 @@ func TestGroupAccept(t *testing.T) {
 					conf = &newConfig
 					return nil
 				},
-			}
-			clientConfig := clientcmd.NewDefaultClientConfig(*tt.conf, nil)
-			upCtx := &upbound.Context{
-				Kubecfg: clientConfig,
 			}
 
 			g := &Group{
@@ -221,7 +217,7 @@ func TestGroupAccept(t *testing.T) {
 				},
 				Name: tt.group,
 			}
-			_, err := g.Accept(context.Background(), upCtx, writer)
+			_, err := g.Accept(writer)
 			if diff := cmp.Diff(tt.wantErr, fmt.Sprintf("%v", err)); diff != "" {
 				t.Fatalf("g.accept(...): -want err, +got err:\n%s", diff)
 			}
@@ -386,6 +382,7 @@ func TestControlPlaneAccept(t *testing.T) {
 			var last string
 			var conf *clientcmdapi.Config
 			writer := &fileWriter{
+				upCtx:            &upbound.Context{Kubecfg: clientcmd.NewDefaultClientConfig(*tt.conf, nil)},
 				kubeContext:      tt.preferred,
 				writeLastContext: func(c string) error { last = c; return nil },
 				verify:           func(c *clientcmdapi.Config) error { return nil },
@@ -393,10 +390,6 @@ func TestControlPlaneAccept(t *testing.T) {
 					conf = &newConfig
 					return nil
 				},
-			}
-			clientConfig := clientcmd.NewDefaultClientConfig(*tt.conf, nil)
-			upCtx := &upbound.Context{
-				Kubecfg: clientConfig,
 			}
 
 			ctp := &ControlPlane{
@@ -411,7 +404,7 @@ func TestControlPlaneAccept(t *testing.T) {
 				},
 				Name: tt.ctp.Name,
 			}
-			_, err := ctp.Accept(context.Background(), upCtx, writer)
+			_, err := ctp.Accept(writer)
 			if diff := cmp.Diff(tt.wantErr, fmt.Sprintf("%v", err)); diff != "" {
 				t.Fatalf("g.accept(...): -want err, +got err:\n%s", diff)
 			}

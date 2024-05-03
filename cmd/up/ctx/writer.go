@@ -10,11 +10,11 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/utils/ptr"
 
-	upbound "github.com/upbound/up/internal/upbound"
+	"github.com/upbound/up/internal/upbound"
 )
 
 type kubeContextWriter interface {
-	Write(upCtx *upbound.Context, config *clientcmdapi.Config) error
+	Write(config *clientcmdapi.Config) error
 }
 
 type printWriter struct {
@@ -23,7 +23,7 @@ type printWriter struct {
 var _ kubeContextWriter = &printWriter{}
 
 // Write implements kubeconfigWriter.
-func (p *printWriter) Write(upCtx *upbound.Context, config *clientcmdapi.Config) error {
+func (p *printWriter) Write(config *clientcmdapi.Config) error {
 	b, err := clientcmd.Write(*config)
 	if err != nil {
 		return err
@@ -34,6 +34,7 @@ func (p *printWriter) Write(upCtx *upbound.Context, config *clientcmdapi.Config)
 }
 
 type fileWriter struct {
+	upCtx            *upbound.Context
 	fileOverride     string
 	kubeContext      string
 	writeLastContext func(string) error
@@ -44,8 +45,8 @@ type fileWriter struct {
 var _ kubeContextWriter = &fileWriter{}
 
 // Write implements kubeconfigWriter.
-func (f *fileWriter) Write(upCtx *upbound.Context, config *clientcmdapi.Config) error {
-	outConfig, err := f.loadOutputKubeconfig(upCtx)
+func (f *fileWriter) Write(config *clientcmdapi.Config) error {
+	outConfig, err := f.loadOutputKubeconfig()
 	if err != nil {
 		return err
 	}
@@ -75,7 +76,7 @@ func (f *fileWriter) Write(upCtx *upbound.Context, config *clientcmdapi.Config) 
 // loadOutputKubeconfig loads the Kubeconfig that will be overwritten by the
 // action, either loading it from the file override or defaulting back to the
 // current kubeconfig
-func (f *fileWriter) loadOutputKubeconfig(upCtx *upbound.Context) (config *clientcmdapi.Config, err error) {
+func (f *fileWriter) loadOutputKubeconfig() (config *clientcmdapi.Config, err error) {
 	if f.fileOverride != "" {
 		config, err = clientcmd.LoadFromFile(f.fileOverride)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -86,7 +87,7 @@ func (f *fileWriter) loadOutputKubeconfig(upCtx *upbound.Context) (config *clien
 		return config, nil
 	}
 
-	raw, err := upCtx.Kubecfg.RawConfig()
+	raw, err := f.upCtx.Kubecfg.RawConfig()
 	if err != nil {
 		return nil, err
 	}
