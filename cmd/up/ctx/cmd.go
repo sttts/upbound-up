@@ -117,7 +117,7 @@ func (c *Cmd) Run(ctx context.Context, kongCtx *kong.Context, upCtx *upbound.Con
 	case "":
 		return c.RunInteractive(ctx, kongCtx, upCtx, initialState)
 	default:
-		return c.RunRelative(ctx, kongCtx, upCtx, initialState)
+		return c.RunRelative(ctx, upCtx, initialState)
 	}
 }
 
@@ -236,7 +236,7 @@ func activateContext(conf *clientcmdapi.Config, sourceContext, preferredContext 
 	return conf, newLastContext, nil
 }
 
-func (c *Cmd) RunRelative(ctx context.Context, kongCtx *kong.Context, upCtx *upbound.Context, initialState NavigationState) error { // nolint:gocyclo // a bit long but ¯\_(ツ)_/¯
+func (c *Cmd) RunRelative(ctx context.Context, upCtx *upbound.Context, initialState NavigationState) error { // nolint:gocyclo // a bit long but ¯\_(ツ)_/¯
 	// begin from root unless we're starting from a relative . or ..
 	state := initialState
 	if !strings.HasPrefix(c.Argument, ".") {
@@ -287,7 +287,7 @@ func (c *Cmd) RunRelative(ctx context.Context, kongCtx *kong.Context, upCtx *upb
 		}
 	}
 
-	// final step if we moved: access the state
+	// final step if we moved: accept the state
 	msg := fmt.Sprintf("Kubeconfig context %q: %s\n", c.KubeContext, m.state.Breadcrumbs())
 	if m.state.Breadcrumbs() != initialState.Breadcrumbs() {
 		accepting, ok := m.state.(Accepting)
@@ -306,9 +306,9 @@ func (c *Cmd) RunRelative(ctx context.Context, kongCtx *kong.Context, upCtx *upb
 		if c.Short {
 			switch state := m.state.(type) {
 			case *Group:
-				fmt.Printf("%s/%s\n", state.space.name, state.name)
+				fmt.Printf("%s/%s\n", state.Space.Name, state.Name)
 			case *ControlPlane:
-				fmt.Printf("%s/%s/%s\n", state.group.space.name, state.NamespacedName().Namespace, state.NamespacedName().Name)
+				fmt.Printf("%s/%s/%s\n", state.Group.Space.Name, state.NamespacedName().Namespace, state.NamespacedName().Name)
 			}
 		} else {
 			fmt.Print(msg)
@@ -365,6 +365,10 @@ func (c *Cmd) kubeContextWriter(upCtx *upbound.Context) kubeContextWriter {
 }
 
 func DeriveState(ctx context.Context, upCtx *upbound.Context, conf *clientcmdapi.Config) (NavigationState, error) {
+	return deriveState(ctx, upCtx, conf, profile.GetIngressHost)
+}
+
+func deriveState(ctx context.Context, upCtx *upbound.Context, conf *clientcmdapi.Config, getIngressHost func(ctx context.Context, cl client.Client) (host string, ca []byte, err error)) (NavigationState, error) {
 	ingress, ctp, exists := upCtx.GetCurrentSpaceContextScope()
 
 	var spaceKubeconfig *clientcmdapi.Config
@@ -396,7 +400,7 @@ func DeriveState(ctx context.Context, upCtx *upbound.Context, conf *clientcmdapi
 	}
 
 	// determine if self-hosted by looking for ingress
-	host, ca, err := profile.GetIngressHost(ctx, spaceClient)
+	host, ca, err := getIngressHost(ctx, spaceClient)
 	if kerrors.IsNotFound(err) || meta.IsNoMatchError(err) || kerrors.IsUnauthorized(err) {
 		return DeriveCloudState(ctx, upCtx, conf)
 	} else if err != nil {
@@ -410,26 +414,26 @@ func DeriveSelfHostedState(ctx context.Context, upCtx *upbound.Context, conf *cl
 	auth := conf.AuthInfos[conf.Contexts[conf.CurrentContext].AuthInfo]
 
 	space := Space{
-		name:     conf.CurrentContext,
-		ingress:  ingress,
-		ca:       ca,
-		authInfo: auth,
+		Name:     conf.CurrentContext,
+		Ingress:  ingress,
+		CA:       ca,
+		AuthInfo: auth,
 	}
 
 	// derive navigation state
 	switch {
 	case ctp.Namespace != "" && ctp.Name != "":
 		return &ControlPlane{
-			group: Group{
-				space: space,
-				name:  ctp.Namespace,
+			Group: Group{
+				Space: space,
+				Name:  ctp.Namespace,
 			},
-			name: ctp.Name,
+			Name: ctp.Name,
 		}, nil
 	case ctp.Namespace != "":
 		return &Group{
-			space: space,
-			name:  ctp.Namespace,
+			Space: space,
+			Name:  ctp.Namespace,
 		}, nil
 	default:
 		return &space, nil
@@ -454,7 +458,7 @@ func DeriveCloudState(ctx context.Context, upCtx *upbound.Context, conf *clientc
 	}
 
 	org := &Organization{
-		name: orgName,
+		Name: orgName,
 	}
 
 	ingress, ctp, exists := upCtx.GetCurrentSpaceContextScope()
@@ -464,28 +468,28 @@ func DeriveCloudState(ctx context.Context, upCtx *upbound.Context, conf *clientc
 
 	spaceName := strings.TrimPrefix(strings.Split(ingress, ".")[0], "https://")
 	space := Space{
-		org:  *org,
-		name: spaceName,
+		Org:  *org,
+		Name: spaceName,
 
-		ingress:  strings.TrimPrefix(ingress, "https://"),
-		ca:       make([]byte, 0),
-		authInfo: auth,
+		Ingress:  strings.TrimPrefix(ingress, "https://"),
+		CA:       make([]byte, 0),
+		AuthInfo: auth,
 	}
 
 	// derive navigation state
 	switch {
 	case ctp.Namespace != "" && ctp.Name != "":
 		return &ControlPlane{
-			group: Group{
-				space: space,
-				name:  ctp.Namespace,
+			Group: Group{
+				Space: space,
+				Name:  ctp.Namespace,
 			},
-			name: ctp.Name,
+			Name: ctp.Name,
 		}, nil
 	case ctp.Namespace != "":
 		return &Group{
-			space: space,
-			name:  ctp.Namespace,
+			Space: space,
+			Name:  ctp.Namespace,
 		}, nil
 	default:
 		return &space, nil

@@ -212,14 +212,14 @@ func TestGroupAccept(t *testing.T) {
 			}
 
 			g := &Group{
-				space: Space{
-					org:      Organization{name: "org"},
-					name:     "space",
-					ingress:  "https://ingress",
-					ca:       []byte{1, 2, 3},
-					authInfo: nil,
+				Space: Space{
+					Org:      Organization{Name: "org"},
+					Name:     "space",
+					Ingress:  "https://ingress",
+					CA:       []byte{1, 2, 3},
+					AuthInfo: nil,
 				},
-				name: tt.group,
+				Name: tt.group,
 			}
 			_, err := g.Accept(context.Background(), upCtx, writer)
 			if diff := cmp.Diff(tt.wantErr, fmt.Sprintf("%v", err)); diff != "" {
@@ -400,16 +400,16 @@ func TestControlPlaneAccept(t *testing.T) {
 			}
 
 			ctp := &ControlPlane{
-				group: Group{
-					space: Space{
-						org:     Organization{name: "org"},
-						name:    "space",
-						ingress: "https://ingress",
-						ca:      []byte{1, 2, 3},
+				Group: Group{
+					Space: Space{
+						Org:     Organization{Name: "org"},
+						Name:    "space",
+						Ingress: "https://ingress",
+						CA:      []byte{1, 2, 3},
 					},
-					name: tt.ctp.Namespace,
+					Name: tt.ctp.Namespace,
 				},
-				name: tt.ctp.Name,
+				Name: tt.ctp.Name,
 			}
 			_, err := ctp.Accept(context.Background(), upCtx, writer)
 			if diff := cmp.Diff(tt.wantErr, fmt.Sprintf("%v", err)); diff != "" {

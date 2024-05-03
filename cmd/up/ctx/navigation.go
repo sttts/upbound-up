@@ -85,7 +85,7 @@ func (r *Root) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item, 
 	items := make([]list.Item, 0, len(orgs))
 	for _, org := range orgs {
 		items = append(items, item{text: org.DisplayName, kind: "organization", matchingTerms: []string{org.Name}, onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
-			m.state = &Organization{name: org.Name}
+			m.state = &Organization{Name: org.Name}
 			return m, nil
 		}})
 	}
@@ -100,7 +100,7 @@ func (r *Root) Breadcrumbs() string {
 var _ Back = &Organization{}
 
 type Organization struct {
-	name string
+	Name string
 }
 
 func (o *Organization) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item, error) { //nolint:gocyclo
@@ -115,7 +115,7 @@ func (o *Organization) Items(ctx context.Context, upCtx *upbound.Context) ([]lis
 	}
 
 	var l upboundv1alpha1.SpaceList
-	err = cloudClient.List(ctx, &l, &client.ListOptions{Namespace: o.name})
+	err = cloudClient.List(ctx, &l, &client.ListOptions{Namespace: o.Name})
 	if err != nil {
 		return nil, err
 	}
@@ -137,12 +137,12 @@ func (o *Organization) Items(ctx context.Context, upCtx *upbound.Context) ([]lis
 
 		items = append(items, item{text: space.GetObjectMeta().GetName(), kind: "space", onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
 			m.state = &Space{
-				org:     *o,
-				name:    space.GetObjectMeta().GetName(),
-				ingress: space.Status.FQDN,
+				Org:     *o,
+				Name:    space.GetObjectMeta().GetName(),
+				Ingress: space.Status.FQDN,
 				// todo(redbackthomson): Replace with public CA data once available
-				ca:       make([]byte, 0),
-				authInfo: authInfo,
+				CA:       make([]byte, 0),
+				AuthInfo: authInfo,
 			}
 			return m, nil
 		}})
@@ -185,7 +185,7 @@ func (o *Organization) getOrgScopedAuthInfo(upCtx *upbound.Context) (*clientcmda
 			Env: []clientcmdapi.ExecEnvVar{
 				clientcmdapi.ExecEnvVar{
 					Name:  "ORGANIZATION",
-					Value: o.name,
+					Value: o.Name,
 				},
 				clientcmdapi.ExecEnvVar{
 					Name:  "UP_PROFILE",
@@ -207,12 +207,12 @@ var _ Back = &Space{}
 
 // Space provides the navigation node for a space.
 type Space struct {
-	org  Organization
-	name string
+	Org  Organization
+	Name string
 
-	ingress  string
-	ca       []byte
-	authInfo *clientcmdapi.AuthInfo
+	Ingress  string
+	CA       []byte
+	AuthInfo *clientcmdapi.AuthInfo
 }
 
 func (s *Space) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item, error) {
@@ -232,7 +232,7 @@ func (s *Space) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item,
 	}
 	for _, ns := range nss.Items {
 		items = append(items, item{text: ns.Name, kind: "group", onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
-			m.state = &Group{space: *s, name: ns.Name}
+			m.state = &Group{Space: *s, Name: ns.Name}
 			return m, nil
 		}})
 	}
@@ -245,12 +245,12 @@ func (s *Space) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item,
 }
 
 func (s *Space) Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
-	m.state = &s.org
+	m.state = &s.Org
 	return m, nil
 }
 
 func (s *Space) IsCloud() bool {
-	return s.org.name != ""
+	return s.Org.Name != ""
 }
 
 func (s *Space) CanBack() bool {
@@ -258,12 +258,12 @@ func (s *Space) CanBack() bool {
 }
 
 func (s *Space) Breadcrumbs() string {
-	return upboundRootStyle.Render("Upbound") + pathSegmentStyle.Render(" space ") + pathSegmentStyle.Render(s.name)
+	return upboundRootStyle.Render("Upbound") + pathSegmentStyle.Render(" space ") + pathSegmentStyle.Render(s.Name)
 }
 
 // GetClient returns a kube client pointed at the current space
 func (s *Space) GetClient() (client.Client, error) {
-	rest, err := buildSpacesClient(s.ingress, s.ca, s.authInfo, types.NamespacedName{}).ClientConfig()
+	rest, err := buildSpacesClient(s.Ingress, s.CA, s.AuthInfo, types.NamespacedName{}).ClientConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -273,21 +273,21 @@ func (s *Space) GetClient() (client.Client, error) {
 
 // Group provides the navigation node for a concrete group aka namespace.
 type Group struct {
-	space Space
-	name  string
+	Space Space
+	Name  string
 }
 
 var _ Accepting = &Group{}
 var _ Back = &Group{}
 
 func (g *Group) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item, error) {
-	cl, err := g.space.GetClient()
+	cl, err := g.Space.GetClient()
 	if err != nil {
 		return nil, err
 	}
 
 	ctps := &spacesv1beta1.ControlPlaneList{}
-	if err := cl.List(ctx, ctps, client.InNamespace(g.name)); err != nil {
+	if err := cl.List(ctx, ctps, client.InNamespace(g.Name)); err != nil {
 		return nil, err
 	}
 
@@ -296,7 +296,7 @@ func (g *Group) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item,
 
 	for _, ctp := range ctps.Items {
 		items = append(items, item{text: ctp.Name, kind: "controlplane", onEnter: func(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
-			m.state = &ControlPlane{group: *g, name: ctp.Name}
+			m.state = &ControlPlane{Group: *g, Name: ctp.Name}
 			return m, nil
 		}})
 	}
@@ -318,11 +318,11 @@ func (g *Group) Items(ctx context.Context, upCtx *upbound.Context) ([]list.Item,
 }
 
 func (g *Group) Breadcrumbs() string {
-	return g.space.Breadcrumbs() + pathSeparatorStyle.Render(" > ") + pathSegmentStyle.Render(g.name)
+	return g.Space.Breadcrumbs() + pathSeparatorStyle.Render(" > ") + pathSegmentStyle.Render(g.Name)
 }
 
 func (g *Group) Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
-	m.state = &g.space
+	m.state = &g.Space
 	return m, nil
 }
 
@@ -332,8 +332,8 @@ func (g *Group) CanBack() bool {
 
 // ControlPlane provides the navigation node for a concrete controlplane.
 type ControlPlane struct {
-	group Group
-	name  string
+	Group Group
+	Name  string
 }
 
 var _ Accepting = &ControlPlane{}
@@ -355,11 +355,11 @@ func (ctp *ControlPlane) Items(ctx context.Context, upCtx *upbound.Context) ([]l
 }
 
 func (ctp *ControlPlane) Breadcrumbs() string {
-	return ctp.group.space.Breadcrumbs() + pathSeparatorStyle.Render(" > ") + pathSegmentStyle.Render(ctp.group.name) + pathSeparatorStyle.Render("/") + pathSegmentStyle.Render(ctp.name)
+	return ctp.Group.Space.Breadcrumbs() + pathSeparatorStyle.Render(" > ") + pathSegmentStyle.Render(ctp.Group.Name) + pathSeparatorStyle.Render("/") + pathSegmentStyle.Render(ctp.Name)
 }
 
 func (ctp *ControlPlane) Back(ctx context.Context, upCtx *upbound.Context, m model) (model, error) {
-	m.state = &ctp.group
+	m.state = &ctp.Group
 	return m, nil
 }
 
@@ -368,7 +368,7 @@ func (ctp *ControlPlane) CanBack() bool {
 }
 
 func (ctp *ControlPlane) NamespacedName() types.NamespacedName {
-	return types.NamespacedName{Name: ctp.name, Namespace: ctp.group.name}
+	return types.NamespacedName{Name: ctp.Name, Namespace: ctp.Group.Name}
 }
 
 // buildSpacesClient creates a new kubeconfig hardcoded to match the provided
